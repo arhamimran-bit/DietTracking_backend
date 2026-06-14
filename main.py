@@ -4,6 +4,9 @@ import json
 from pydantic import BaseModel
 import os
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+api_key = os.environ.get("OPENAI_API_KEY")
+print(f"API Key found: {api_key is not None}")
+client = OpenAI(api_key=api_key)
 
 
 
