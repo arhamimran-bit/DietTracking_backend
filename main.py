@@ -3,10 +3,7 @@ from openai import OpenAI
 import json
 from pydantic import BaseModel
 import os
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-api_key = os.environ.get("OPENAI_API_KEY")
-print(f"API Key found: {api_key is not None}")
-client = OpenAI(api_key=api_key)
+
 
 
 
@@ -17,6 +14,7 @@ class PhotoRequest(BaseModel):
 app = FastAPI()
 @app.post("/analyze-meal-photo")
 def analyze_meal_photo(request: PhotoRequest):
+    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[{
@@ -52,6 +50,7 @@ All nutrition values must be plain integers. No markdown, no code blocks, just p
 @app.get("/analyze-meal")
 
 def analyze_meal(meal: str):
+    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
     response = client.chat.completions.create(
         model="gpt-4o-mini", #   gpt-4o (strong model)   gpt-4o-mini (weak and cheap model)
         messages=[
@@ -76,6 +75,7 @@ def analyze_meal(meal: str):
 
 @app.get("/get-advice")
 def get_advice(calories: int, protein: int, calories_goal: int, protein_goal: int):
+    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{
