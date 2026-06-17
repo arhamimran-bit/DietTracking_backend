@@ -74,23 +74,30 @@ def analyze_meal(meal: str):
 
 
 @app.get("/get-advice")
-def get_advice(calories: int, protein: int, calories_goal: int, protein_goal: int):
+def get_advice(
+    calories: int, protein: int, carbs: int, fats: int, sugar: int, fiber: int,
+    calories_goal: int, protein_goal: int, carbs_goal: int, fats_goal: int, sugar_goal: int, fiber_goal: int
+):
     client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{
             "role": "user",
-            "content": f"""You are a personal diet coach. Today's stats:
-            - Calories: {round(calories/calories_goal*100)}% of goal
-            - Protein: {round(protein/protein_goal*100)}% of goal
+            "content": f"""You are a personal diet coach. Today's stats (as % of goal):
+            - Calories: {round(calories/calories_goal*100)}%
+            - Protein: {round(protein/protein_goal*100)}%
+            - Carbs: {round(carbs/carbs_goal*100)}%
+            - Fats: {round(fats/fats_goal*100)}%
+            - Sugar: {round(sugar/sugar_goal*100)}%
+            - Fiber: {round(fiber/fiber_goal*100)}%
 
-            Give ONE ultra-short advice (max 20 words). Priority rules: (you don't have to tell the user about this, just find out a good breif insightful answer)
-            - If calories % is lower than protein %: focus on calories
-            - If protein % is lower than calories %: focus on protein  
-            - If both under 30%: say to eat a big meal 
-            - If both over 80%: give short praise
-            - If anything over 100%: warn about it
-            No numbers, no food suggestions, just the core action."""
+            Give ONE ultra-short advice (max 20 words). Priority rules:
+            - Sugar over 100% is the most urgent issue — warn about it first
+            - If protein and fiber are both low, mention whichever is lower
+            - If calories are very low (under 30%) say to eat a bigger meal
+            - If everything is in good range (70-100% for most, under 100% for sugar), give short praise
+            - Pick only ONE most important issue, don't list multiple
+            No numbers, no specific food suggestions, just the core action."""
         }]
     )
     return {"advice": response.choices[0].message.content}
