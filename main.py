@@ -138,13 +138,15 @@ def analyze_meal_photo(request: PhotoRequest):
 @app.get("/analyze-meal")
 
 def analyze_meal(meal: str, device_id: str):
+    
+    if meal.strip() == "":
+        return {"error": "nofood"}
 
     prompt_count, image_count = get_counts(device_id)
-
     if prompt_count < 2 :
         
         increment_count(device_id, is_photo=False)
-
+    
         client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
         response = client.chat.completions.create(
             model="gpt-4o-mini", # ai model                  gpt-4o (strong model)   gpt-4o-mini (weak and cheap model)
@@ -163,6 +165,7 @@ def analyze_meal(meal: str, device_id: str):
 
         if raw.lower() == "nofood":
             return {"error": "nofood"}
+        
         print(json.loads(raw)["calories"])
         return json.loads(raw)
     else: 
