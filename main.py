@@ -3,84 +3,181 @@ from openai import OpenAI
 import json
 from pydantic import BaseModel
 import os
+import sqlite3
+from datetime import date
 
+
+def init_db():
+    conn = sqlite3.connect("usage.db")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS usage_limits (
+            device_id TEXT PRIMARY KEY,
+            date TEXT,
+            prompt_count INTEGER,
+            image_count INTEGER
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+init_db()
+
+
+def get_counts(device_id: str):
+    conn = sqlite3.connect("usage.db")
+    row = conn.execute(
+        "SELECT date, prompt_count, image_count FROM usage_limits WHERE device_id = ?",
+        (device_id,)
+    ).fetchone()
+
+    today = str(date.today())
+
+    if row is None:
+        
+        # No record exists yet for this device — create one
+        conn.execute(
+            "INSERT INTO usage_limits (device_id, date, prompt_count, image_count) VALUES (?, ?, 0, 0)",
+            (device_id, today)
+        )
+        conn.commit()
+        conn.close()
+        return 0, 0
+     
+
+    stored_date, prompt_count, image_count = row
+
+    # YOUR TURN: write the condition here.
+    if stored_date != today:
+        conn.execute(
+            "UPDATE usage_limits SET date = ?, prompt_count = 0, image_count = 0 WHERE device_id = ?",
+            (today, device_id)
+        )
+        conn.commit()
+        conn.close()
+        return 0, 0
+    else:
+        conn.close()
+        return prompt_count, image_count
 
 
 
 class PhotoRequest(BaseModel):
     image_base64: str
     user_prompt: str = ""
+    device_id: str
+
+def increment_count(device_id: str, is_photo: bool):
+    conn = sqlite3.connect("usage.db")
+    
+    if is_photo:
+        conn.execute(
+            "UPDATE usage_limits SET image_count = image_count + 1 WHERE device_id = ?",
+            (device_id,)
+        )
+    else:
+        conn.execute(
+            "UPDATE usage_limits SET prompt_count = prompt_count + 1 WHERE device_id = ?",
+            (device_id,)
+        ) 
+
+    conn.commit()
+    conn.close()
+
 
 app = FastAPI()
 @app.post("/analyze-meal-photo")
 def analyze_meal_photo(request: PhotoRequest):
-    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{
-            "role": "user",
-            "content": [
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/jpeg;base64,{request.image_base64}"
-                    }
-                },
-                {
-                    "type": "text",
-                    "text": f"""Analyze this food image. {f'The user says: {request.user_prompt}.' if request.user_prompt else ''}
-Use any objects visible (hands, plates, utensils) to estimate portion sizes accurately.
-Estimate nutrition for total food visible. 
-{'Also generate a short descriptive meal name (max 5 words).' if not request.user_prompt else ''}
-Return ONLY a JSON object with these exact keys: calories, protein, carbs, fats, sugar, fiber, meal_name.
-{'Set meal_name to: ' + request.user_prompt if request.user_prompt else ''}
-All nutrition values must be plain integers. No markdown, no code blocks, just pure JSON. If no food visible, return exactly: nofood"""
-        }]
-        }]
-    )
-    
-    raw = response.choices[0].message.content.strip()
-    raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-    if raw.lower() == "nofood":
-        return {"error": "nofood"}
-    return json.loads(raw) 
+
+    prompt_count, image_count = get_counts(request.device_id)
+
+    if image_count < 4: 
+
+        increment_count(request.device_id, is_photo=True)
+
+        client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+        response = client.chat.completions.create(
+            model="gpt-4o", #ai model 
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{request.image_base64}"
+                        }
+                    },
+                    {
+                        "type": "text",
+                        "text": f"""Analyze this food image. {f'The user says: {request.user_prompt}.' if request.user_prompt else ''}
+    Use any objects visible (hands, plates, utensils) to estimate portion sizes accurately.
+    Estimate nutrition for total food visible. 
+    {'Also generate a short descriptive meal name (max 5 words).' if not request.user_prompt else ''}
+    Return ONLY a JSON object with these exact keys: calories, protein, carbs, fats, sugar, fiber, meal_name.
+    {'Set meal_name to: ' + request.user_prompt if request.user_prompt else ''}
+    All nutrition values must be plain integers. No markdown, no code blocks, just pure JSON. If no food visible, return exactly: nofood"""
+            }]
+            }]
+        )
+
+        raw = response.choices[0].message.content.strip()
+        raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        
+
+
+        if raw.lower() == "nofood":
+            return {"error": "nofood"}
+
+
+        return json.loads(raw) 
+    else:
+        return {"error": "Picture limit reached"}
+
 
 
 
 @app.get("/analyze-meal")
 
-def analyze_meal(meal: str):
-    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-    response = client.chat.completions.create(
-        model="gpt-4o-mini", #   gpt-4o (strong model)   gpt-4o-mini (weak and cheap model)
-        messages=[
-            {
-                "role": "user",
-                "content": f"Analyze this food/meal: {meal}. Estimate the nutrition for a typical serving. Return ONLY a JSON object with these exact keys: calories, protein, carbs, fats, sugar, fiber. No markdown, no code blocks, just pure JSON. If the input is completely unrelated to food (like random words or code), return exactly: nofood"
-            }
-        ]
-    )
+def analyze_meal(meal: str, device_id: str):
+
+    prompt_count, image_count = get_counts(device_id)
+
+    if prompt_count < 2 :
+        
+        increment_count(device_id, is_photo=False)
+
+        client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+        response = client.chat.completions.create(
+            model="gpt-4o-mini", # ai model                  gpt-4o (strong model)   gpt-4o-mini (weak and cheap model)
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"Analyze this food/meal: {meal}. Estimate the nutrition for a typical serving. Return ONLY a JSON object with these exact keys: calories, protein, carbs, fats, sugar, fiber. No markdown, no code blocks, just pure JSON. If the input is completely unrelated to food (like random words or code), return exactly: nofood"
+                }
+            ]
+        )
 
 
-    raw = response.choices[0].message.content
-    raw = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-    print(f"RAW RESPONSE: '{raw}'")  # add this
+        raw = response.choices[0].message.content
+        raw = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        print(f"RAW RESPONSE: '{raw}'")  # add this
 
-    if raw.lower() == "nofood":
-        return {"error": "nofood"}
-    print(json.loads(raw)["calories"])
-    return json.loads(raw)
+        if raw.lower() == "nofood":
+            return {"error": "nofood"}
+        print(json.loads(raw)["calories"])
+        return json.loads(raw)
+    else: 
+        return {"error" : "Prompt limit reached"}
 
 
 
-@app.get("/get-advice")
+@app.get("/get-advice")        
 def get_advice(
     calories: int, protein: int, carbs: int, fats: int, sugar: int, fiber: int,
     calories_goal: int, protein_goal: int, carbs_goal: int, fats_goal: int, sugar_goal: int, fiber_goal: int
 ):
     client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-4o-mini", #ai model
         messages=[{
             "role": "user",
             "content": f"""You are a personal diet coach. Today's stats (as % of goal):
