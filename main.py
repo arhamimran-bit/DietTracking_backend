@@ -143,7 +143,7 @@ def analyze_meal(meal: str, device_id: str):
         return {"error": "nofood"}
 
     prompt_count, image_count = get_counts(device_id)
-    if prompt_count < 2 :
+    if prompt_count < 12 :
         
         increment_count(device_id, is_photo=False)
     
