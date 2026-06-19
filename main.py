@@ -90,7 +90,7 @@ def analyze_meal_photo(request: PhotoRequest):
 
     prompt_count, image_count = get_counts(request.device_id)
 
-    if image_count < 4: 
+    if image_count < 6: 
 
         increment_count(request.device_id, is_photo=True)
 
@@ -138,7 +138,7 @@ def analyze_meal_photo(request: PhotoRequest):
 @app.get("/analyze-meal")
 
 def analyze_meal(meal: str, device_id: str):
-    
+
     if meal.strip() == "":
         return {"error": "nofood"}
 
