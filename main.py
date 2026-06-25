@@ -90,7 +90,7 @@ def analyze_meal_photo(request: PhotoRequest):
 
     prompt_count, image_count = get_counts(request.device_id)
 
-    if image_count < 6: 
+    if image_count < 4: 
 
         increment_count(request.device_id, is_photo=True)
 
@@ -110,7 +110,7 @@ def analyze_meal_photo(request: PhotoRequest):
                         "type": "text",
                         "text": f"""Analyze this food image. {f'The user says: {request.user_prompt}.' if request.user_prompt else ''}
     Use any objects visible (hands, plates, utensils) to estimate portion sizes accurately.
-    Estimate nutrition for total food visible. 
+    Estimate nutrition for total food visible. For sugar specifically: most whole foods (meat, rice, bread, vegetables, plain dairy) contain very little or no sugar — estimate sugar conservatively and only assign high sugar values to foods that are overtly sweet (desserts, candy, soda, fruit, sweetened sauces). Sugar should almost always be a small fraction of total carbs, not a large one, unless the food is clearly a sweet/sugary item. 
     {'Also generate a short descriptive meal name (max 5 words).' if not request.user_prompt else ''}
     Return ONLY a JSON object with these exact keys: calories, protein, carbs, fats, sugar, fiber, meal_name.
     {'Set meal_name to: ' + request.user_prompt if request.user_prompt else ''}
@@ -143,7 +143,7 @@ def analyze_meal(meal: str, device_id: str):
         return {"error": "nofood"}
 
     prompt_count, image_count = get_counts(device_id)
-    if prompt_count < 12 :
+    if prompt_count < 10 :
         
         increment_count(device_id, is_photo=False)
     
@@ -153,8 +153,7 @@ def analyze_meal(meal: str, device_id: str):
             messages=[
                 {
                     "role": "user",
-                    "content": f"Analyze this food/meal: {meal}. Estimate the nutrition for a typical serving. Return ONLY a JSON object with these exact keys: calories, protein, carbs, fats, sugar, fiber. No markdown, no code blocks, just pure JSON. If the input is completely unrelated to food (like random words or code), return exactly: nofood"
-                }
+                    "content": f"Analyze this food/meal: {meal}. Estimate the nutrition for a typical serving. Return ONLY a JSON object with these exact keys: calories, protein, carbs, fats, sugar, fiber. No markdown, no code blocks, just pure JSON. For sugar specifically: most whole foods (meat, rice, bread, vegetables, plain dairy) contain very little or no sugar — estimate sugar conservatively and only assign high sugar values to foods that are overtly sweet (desserts, candy, soda, fruit, sweetened sauces). Sugar should almost always be a small fraction of total carbs, not a large one, unless the food is clearly a sweet/sugary item. If the input is completely unrelated to food (like random words or code), return exactly: nofood"                }
             ]
         )
 
