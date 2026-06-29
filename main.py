@@ -28,12 +28,17 @@ def init_db():
         CREATE TABLE IF NOT EXISTS feedback (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             question TEXT,
-            options_quantity INTEGER, 
+            options_quantity INTEGER,
             options TEXT,
             is_active BOOLEAN,
-            expires_at TEXT
+            expires_at TEXT,
+            created_at TEXT
         )
-    """)    
+    """)
+    try:
+        conn.execute("ALTER TABLE feedback ADD COLUMN created_at TEXT")
+    except Exception:
+        pass
     conn.commit()
     conn.close()
 
@@ -154,15 +159,21 @@ def submit_text_feedback(request: TextFeedbackRequest):
 
 @app.get("/panel_posts")
 def panel_posts():
+    today = str(date.today())
     conn = sqlite3.connect("backend.db")
-    rows = conn.execute("SELECT id, question, options, is_active, expires_at FROM feedback").fetchall()
+    conn.execute(
+        "UPDATE feedback SET is_active = 0 WHERE expires_at < ? AND is_active = 1",
+        (today,)
+    )
+    conn.commit()
+    rows = conn.execute("SELECT id, question, options, is_active, expires_at, created_at FROM feedback").fetchall()
     conn.close()
     posts = []
     for r in rows:
         posts.append({
             "id": r[0], "question": r[1],
             "options": r[2].split(","),
-            "is_active": bool(r[3]), "expires_at": r[4]
+            "is_active": bool(r[3]), "expires_at": r[4], "created_at": r[5]
         })
     return {"posts": posts}
 
@@ -177,6 +188,15 @@ def get_text_feedback():
     return {"feedback": feedback_list}
 
 
+@app.delete("/text_feedback")
+def clear_text_feedback():
+    conn = sqlite3.connect("backend.db")
+    conn.execute("DELETE FROM feedback_specific")
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
+
+
 
 @app.post("/panel_new_post")
 def panel_new_post(request: PanelRequest):
@@ -186,8 +206,8 @@ def panel_new_post(request: PanelRequest):
 
     conn = sqlite3.connect("backend.db")
     conn.execute(
-        "INSERT INTO feedback (question, options_quantity, options, is_active, expires_at) VALUES (?, ?, ?, ?, ?)",
-        (request.question, len(request.options), options_str, request.active, expires)
+        "INSERT INTO feedback (question, options_quantity, options, is_active, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (request.question, len(request.options), options_str, request.active, expires, str(date.today()))
     )
     conn.commit()
     conn.close()
