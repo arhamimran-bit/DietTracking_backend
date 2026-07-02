@@ -11,7 +11,7 @@ from datetime import date, timedelta
 
 
 def init_db():
-    conn = sqlite3.connect("backend.db")     # usage limits 
+    conn = sqlite3.connect("/data/backend.db")     # usage limits 
     conn.execute("""
         CREATE TABLE IF NOT EXISTS usage_limits (
             device_id TEXT PRIMARY KEY,
@@ -23,7 +23,7 @@ def init_db():
     conn.commit()
     conn.close()
 
-    conn = sqlite3.connect("backend.db")        #  mainly for pannel
+    conn = sqlite3.connect("/data/backend.db")        #  mainly for pannel
     conn.execute("""
         CREATE TABLE IF NOT EXISTS feedback (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,7 +42,7 @@ def init_db():
     conn.commit()
     conn.close()
 
-    conn = sqlite3.connect("backend.db")                #  feedback screen -> post responses
+    conn = sqlite3.connect("/data/backend.db")                #  feedback screen -> post responses
     conn.execute("""
         CREATE TABLE IF NOT EXISTS feedback_from_post (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -54,7 +54,7 @@ def init_db():
     conn.commit()
     conn.close()    
 
-    conn = sqlite3.connect("backend.db")                    #  feedback screen -> any specifc response
+    conn = sqlite3.connect("/data/backend.db")                    #  feedback screen -> any specifc response
     conn.execute("""
         CREATE TABLE IF NOT EXISTS feedback_specific (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,7 +68,7 @@ init_db()
 
 
 def get_counts(device_id: str):
-    conn = sqlite3.connect("backend.db")
+    conn = sqlite3.connect("/data/backend.db")
     row = conn.execute(
         "SELECT date, prompt_count, image_count FROM usage_limits WHERE device_id = ?",
         (device_id,)
@@ -128,7 +128,7 @@ class ToggleActiveRequest(BaseModel):
 app = FastAPI()
 @app.patch("/panel_posts/{post_id}")
 def toggle_post_active(post_id: int, request: ToggleActiveRequest):
-    conn = sqlite3.connect("backend.db")
+    conn = sqlite3.connect("/data/backend.db")
     conn.execute("UPDATE feedback SET is_active = ? WHERE id = ?", (request.is_active, post_id))
     conn.commit()
     conn.close()
@@ -137,7 +137,7 @@ def toggle_post_active(post_id: int, request: ToggleActiveRequest):
 
 @app.delete("/panel_posts/{post_id}")
 def delete_post(post_id: int):
-    conn = sqlite3.connect("backend.db")
+    conn = sqlite3.connect("/data/backend.db")
     conn.execute("DELETE FROM feedback WHERE id = ?", (post_id,))
     conn.execute("DELETE FROM feedback_from_post WHERE post_id = ?", (post_id,))
     conn.commit()
@@ -147,7 +147,7 @@ def delete_post(post_id: int):
 
 @app.post("/submit_text_feedback")
 def submit_text_feedback(request: TextFeedbackRequest):
-    conn = sqlite3.connect("backend.db")
+    conn = sqlite3.connect("/data/backend.db")
     conn.execute(
         "INSERT INTO feedback_specific (user_id, feedback) VALUES (?, ?)",
         (request.device_id, request.feedback)
@@ -160,7 +160,7 @@ def submit_text_feedback(request: TextFeedbackRequest):
 @app.get("/panel_posts")
 def panel_posts():
     today = str(date.today())
-    conn = sqlite3.connect("backend.db")
+    conn = sqlite3.connect("/data/backend.db")
     conn.execute(
         "UPDATE feedback SET is_active = 0 WHERE expires_at < ? AND is_active = 1",
         (today,)
@@ -180,7 +180,7 @@ def panel_posts():
 
 @app.get("/text_feedback")
 def get_text_feedback():
-    conn = sqlite3.connect("backend.db")
+    conn = sqlite3.connect("/data/backend.db")
     rows = conn.execute("SELECT id, user_id, feedback FROM feedback_specific").fetchall()
     conn.close()
 
@@ -190,7 +190,7 @@ def get_text_feedback():
 
 @app.delete("/text_feedback")
 def clear_text_feedback():
-    conn = sqlite3.connect("backend.db")
+    conn = sqlite3.connect("/data/backend.db")
     conn.execute("DELETE FROM feedback_specific")
     conn.commit()
     conn.close()
@@ -204,7 +204,7 @@ def panel_new_post(request: PanelRequest):
     options_str = ",".join(request.options)
     expires = str(date.today() + timedelta(days=request.duration_days))
 
-    conn = sqlite3.connect("backend.db")
+    conn = sqlite3.connect("/data/backend.db")
     conn.execute(
         "INSERT INTO feedback (question, options_quantity, options, is_active, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)",
         (request.question, len(request.options), options_str, request.active, expires, str(date.today()))
@@ -220,7 +220,7 @@ class ResponseRequest(BaseModel):
 
 @app.post("/submit_response")
 def submit_response(request: ResponseRequest):
-    conn = sqlite3.connect("backend.db")
+    conn = sqlite3.connect("/data/backend.db")
     conn.execute(
         "INSERT INTO feedback_from_post (post_id, option_selected, device_id) VALUES (?, ?, ?)",
         (request.post_id, request.option_selected, request.device_id)
@@ -232,7 +232,7 @@ def submit_response(request: ResponseRequest):
 
 @app.get("/posts/{post_id}/results")
 def get_post_results(post_id: int):
-    conn = sqlite3.connect("backend.db")
+    conn = sqlite3.connect("/data/backend.db")
     rows = conn.execute(
         "SELECT option_selected, COUNT(*) FROM feedback_from_post WHERE post_id = ? GROUP BY option_selected",
         (post_id,)
@@ -251,7 +251,7 @@ def get_post_results(post_id: int):
 @app.get("/posts/active")
 def get_active_posts(device_id: str):
     today = str(date.today())
-    conn = sqlite3.connect("backend.db")
+    conn = sqlite3.connect("/data/backend.db")
 
     conn.execute(
         "UPDATE feedback SET is_active = 0 WHERE expires_at < ? AND is_active = 1",
@@ -279,7 +279,7 @@ def get_active_posts(device_id: str):
 
 
 def increment_count(device_id: str, is_photo: bool):
-    conn = sqlite3.connect("backend.db")
+    conn = sqlite3.connect("/data/backend.db")
     
     if is_photo:
         conn.execute(
